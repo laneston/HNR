@@ -1,6 +1,6 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
-from .efficientnet_b0 import Model
+from .efficientnet_b0 import MNISTEfficientNet
 
 
-__all__ = ("Model",)
+__all__ = ("MNISTEfficientNet",)

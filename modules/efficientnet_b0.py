@@ -1,27 +1,36 @@
-import torch.nn as nn
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import torchvision
-
+from torchvision import transforms
 from torch.utils.data import DataLoader
 from torchvision.models import efficientnet_b0
-from torchvision import transforms
-from torchviz import make_dot
+from torch.cuda.amp import autocast, GradScaler
+import os
 
 
-class Model:
-    def __init__(self, __weights=None):
+class SiLU(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(
+            x
+        )  # Mathematical equivalence implementation[3,5](@ref)
 
-        if isinstance(__weights, str) and __weights == "default":
-            _model = efficientnet_b0(weights="EfficientNet_B0_Weights.IMAGENET1K_V1")
-        else:
-            _model = efficientnet_b0(weights=None)
 
-        # Modify the first convolutional layer to adapt to a single channel input
-        original_conv = _model.features[0][0]
+class MNISTEfficientNet:
+    def __init__(self, use_amp=True):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = self._build_model()
+        self.scaler = GradScaler(enabled=use_amp)
+        self.use_amp = use_amp
 
-        _model.features[0][0] = nn.Conv2d(
-            in_channels=1,  # Change to single channel
+    def _build_model(self):
+        """building and configure EfficientNet-B0 model"""
+        model = efficientnet_b0(weights=None)  # Training from scratch
+
+        # Modify the first layer convolution to adapt to single channel input
+        original_conv = model.features[0][0]
+        model.features[0][0] = nn.Conv2d(
+            in_channels=1,
             out_channels=original_conv.out_channels,
             kernel_size=original_conv.kernel_size,
             stride=original_conv.stride,
@@ -29,67 +38,83 @@ class Model:
             bias=False,
         )
 
+        # nn.init.kaiming_normal_(
+        #     model.features[0][0].weight,
+        #     mode="fan_out",
+        #     nonlinearity="silu",  # EfficientNet use Swish function.
+        # )
+
+        # according to torch version, it cannot use the silu activation function
         nn.init.kaiming_normal_(
-            _model.features[0][0].weight, mode="fan_out", nonlinearity="relu"
+            model.features[0][0].weight,
+            mode="fan_out",
+            nonlinearity="relu",
         )
+
+        model.features[0][2] = SiLU()
 
         # Modify the classification layer
-        _model.classifier[1] = nn.Linear(
-            in_features=_model.classifier[1].in_features, out_features=10
-        )
+        in_features = model.classifier[1].in_features
+        model.classifier[1] = nn.Linear(in_features, 10)
 
-        nn.init.xavier_uniform_(_model.classifier[1].weight)
+        # Classification layer initialization
+        nn.init.normal_(model.classifier[1].weight, 0, 0.01)
+        nn.init.zeros_(model.classifier[1].bias)
 
-        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self._model_ = _model.to(self._device)
+        return model.to(self.device)
 
-    def base_train(self, batch_size=None, mnist_path=None, num_epochs=None) -> dict:
-        if 0 < batch_size < 128 and batch_size % 8 == 0:
-            _batch_size = batch_size
-            print(f"the batch_size of training set is: {_batch_size}")
-        else:
-            raise TypeError(
-                f"{batch_size} is not in compliance with regulations, should be rang 0 to 128, and must be multiple of 8."
-            )
+    def _compute_mnist_stats(self, batch_size=128):
+        # Initialize statistical variables
+        channels_sum = 0.0
+        channels_sq_sum = 0.0
+        num_batches = 0
+        total_pixels = 0
 
-        if type(mnist_path) == str:
-            _mnist_path = mnist_path
-            print(f"the path of training set is: {_mnist_path}")
-        else:
-            raise TypeError(
-                f"{mnist_path} is not in compliance with regulations, should be string format."
-            )
+        loader, _ = self._get_dataloaders(batch_size)
 
-        # Set random seeds to ensure repeatability
-        torch.manual_seed(42)
+        # Traverse all data
+        for images, _ in loader:
+            # Calculate the current batch statistic
+            batch_pixels = images.size(0) * images.size(2) * images.size(3)
+            channels_sum += torch.sum(images, dim=[0, 2, 3])  # 按通道求和
+            channels_sq_sum += torch.sum(images**2, dim=[0, 2, 3])
+            total_pixels += batch_pixels
+            num_batches += 1
 
-        # Data preprocessing
-        # self._transform = transforms.Compose(
-        #     [
-        #         transforms.Resize((224, 224)),
-        #         transforms.Grayscale(
-        #             num_output_channels=1
-        #         ),  # Explicitly declare a single channel
-        #         transforms.ToTensor(),
-        #         # MNIST statistical values,
-        #         # the original MNIST statistical values [0.1307, 0.3081] are applicable to 28x28 inputs,
-        #         # but the distribution changes when enlarged to 224x224.
-        #         transforms.Normalize(
-        #             mean=[0.485],
-        #             std=[0.229],  # Official Recommended Parameters[3](@ref)
-        #         ),
-        #     ]
-        # )
+            # Printing progress
+            if num_batches % 50 == 0:
+                print(f"Processed {num_batches} batches...")
+
+        # Final calculation
+        mean = channels_sum / total_pixels
+        std = torch.sqrt((channels_sq_sum / total_pixels) - (mean**2))
+
+        return mean.numpy(), std.numpy()
+
+    def _get_transforms(self):
+        """
+        Data augmentation and preprocessing
+        Calculate the statistical value of MNIST at a size of 224x224
+        Approximate value obtained from actual calculation
+        (exact value can be calculated from the complete dataset)
+        """
+        # mean, std = self._compute_mnist_stats()
+        # print(f"MNIST 224x224 statistical value:")
+        # print(f"Mean: {mean[0]:.4f}")
+        # print(f"Std:  {std[0]:.4f}")
+
+        mean = [0.1307]
+        std = [0.3081]
 
         train_transform = transforms.Compose(
             [
-                transforms.Resize(224),  # 网页1推荐的EfficientNet标准输入尺寸
-                transforms.RandomRotation(15),  # 增加旋转增强
-                transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),  # 平移增强
+                transforms.Resize(224),
+                transforms.RandomAffine(
+                    degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1)
+                ),
+                transforms.RandomPerspective(distortion_scale=0.2, p=0.5),
                 transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.456], std=[0.224]
-                ),  # 网页8建议的归一化参数调整
+                transforms.Normalize(mean, std),
             ]
         )
 
@@ -97,111 +122,132 @@ class Model:
             [
                 transforms.Resize(224),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.456], std=[0.224]),
+                transforms.Normalize(mean, std),
             ]
         )
 
-        # Load training dataset
-        _train_dataset = torchvision.datasets.MNIST(
-            root=mnist_path, train=True, download=True, transform=train_transform
+        return train_transform, test_transform
+
+    def _get_dataloaders(self, batch_size=128, data_dir="./data"):
+        """Get data loader"""
+        train_transform, test_transform = self._get_transforms()
+
+        train_set = torchvision.datasets.MNIST(
+            root=data_dir, train=True, download=True, transform=train_transform
         )
 
-        # _train_loader = DataLoader(_train_dataset, batch_size=batch_size, shuffle=True)
-        _train_loader = DataLoader(
-            _train_dataset,
-            batch_size=_batch_size,
+        test_set = torchvision.datasets.MNIST(
+            root=data_dir, train=False, download=True, transform=test_transform
+        )
+
+        # Automatically optimize numw_workers
+        num_workers = min(8, os.cpu_count())
+
+        train_loader = DataLoader(
+            train_set,
+            batch_size=batch_size,
             shuffle=True,
-            num_workers=4,
+            num_workers=num_workers,
             pin_memory=True,
             persistent_workers=True,
         )
 
-        # Load test dataset
-        _test_dataset = torchvision.datasets.MNIST(
-            root=_mnist_path, train=False, download=True, transform=test_transform
+        test_loader = DataLoader(
+            test_set,
+            # Use a larger batch size to accelerate validation
+            batch_size=batch_size * 2,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True,
         )
-        # _test_loader = DataLoader(_test_dataset, batch_size=_batch_size, shuffle=True)
 
-        _test_loader = DataLoader(
-            _test_dataset, batch_size=_batch_size, num_workers=2, pin_memory=True
+        return train_loader, test_loader
+
+    def train(self, epochs=20, lr=1e-3, batch_size=128):
+        """Training process"""
+        # Initialize the model and optimizer
+        self.model.train()
+        optimizer = optim.AdamW(
+            self.model.parameters(), lr=lr, weight_decay=1e-4, betas=(0.9, 0.999)
         )
 
-        # Define loss function and optimizer
-        # _criterion = nn.CrossEntropyLoss()
-        # _optimizer = optim.Adam(self._model_.parameters(), lr=0.001)
-        # _scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        #     _optimizer, "max", patience=2
-        # )
+        # Cosine annealing learning rate scheduling
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=epochs, eta_min=1e-6
+        )
 
-        _criterion = nn.CrossEntropyLoss()
-        _optimizer = optim.AdamW(
-            self._model_.parameters(), lr=1e-3, weight_decay=1e-4
-        )  # 网页8推荐的AdamW优化器
-        _scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            _optimizer, T_max=30
-        )  # 网页1提到的余弦退火策略
+        # Get data loader
+        train_loader, test_loader = self._get_dataloaders(batch_size)
 
         best_acc = 0.0
+        history = {"train_loss": [], "test_acc": []}
 
-        for epoch in range(num_epochs):
-            self._model_.train()
-            running_loss = 0.0
+        for epoch in range(epochs):
+            self.model.train()
+            total_loss = 0.0
 
-            for images, labels in _train_loader:
-                images = images.to(self._device)
-                labels = labels.to(self._device)
+            for images, labels in train_loader:
+                images = images.to(self.device, non_blocking=True)
+                labels = labels.to(self.device, non_blocking=True)
 
-                _optimizer.zero_grad()
-                outputs = self._model_(images)
-                loss = _criterion(outputs, labels)
-                loss.backward()
-                _optimizer.step()
+                # Automatic Hybrid Precision Training
+                with autocast(enabled=self.use_amp):
+                    outputs = self.model(images)
+                    loss = nn.CrossEntropyLoss()(outputs, labels)
 
-                running_loss += loss.item()
+                # Gradient update
+                optimizer.zero_grad(set_to_none=True)
+                self.scaler.scale(loss).backward()
+                self.scaler.step(optimizer)
+                self.scaler.update()
+
+                total_loss += loss.item() * images.size(0)
 
             # verify
-            self._model_.eval()
-            correct = 0
-            total = 0
-            with torch.no_grad():
-                for images, labels in _test_loader:
-                    images = images.to(self._device)
-                    labels = labels.to(self._device)
-                    outputs = self._model_(images)
-                    _, predicted = torch.max(outputs.data, 1)
-                    total += labels.size(0)
-                    correct += (predicted == labels).sum().item()
+            test_acc = self.evaluate(test_loader)
+            scheduler.step()
 
-            acc = 100 * correct / total
-            _scheduler.step(acc)
-
-            print(
-                f"Epoch [{epoch+1}/{num_epochs}] | "
-                f"Loss: {running_loss/len(_train_loader):.4f} | "
-                f"Test Acc: {acc:.2f}%"
-            )
+            # Record the training process
+            avg_loss = total_loss / len(train_loader.dataset)
+            history["train_loss"].append(avg_loss)
+            history["test_acc"].append(test_acc)
 
             # Save the best model
-            if acc > best_acc:
-                best_acc = acc
-                r_model = self._model_.state_dict()
+            if test_acc > best_acc:
+                best_acc = test_acc
+                best_weights = self.model.state_dict().copy()
 
-        print(f"Best Test Accuracy: {best_acc:.2f}%")
-        return r_model
+            # Printing progress
+            current_lr = optimizer.param_groups[0]["lr"]
+            print(
+                f"Epoch {epoch+1}/{epochs} | "
+                f"Loss: {avg_loss:.4f} | "
+                f"Acc: {test_acc:.2f}% | "
+                f"LR: {current_lr:.2e}"
+            )
 
-    def graph_draw(self):
-        # Virtual input of numerical values to generate calculation graphs
-        x = torch.randn(1, 1, 224, 224, requires_grad=True)
-        x = x.to(self._device)
+        # Load the best model weights
+        self.model.load_state_dict(best_weights)
+        print(f"\nBest Test Accuracy: {best_acc:.2f}%")
+        return history, best_weights
 
-        # Generate a computational graph
-        output = self._model_(x)
-        graph = make_dot(
-            output,
-            params=dict(list(self._model_.named_parameters()) + [("input", x)]),
-            show_attrs=True,
-            show_saved=True,
-        )
+    def evaluate(self, loader):
+        """Evaluation"""
+        self.model.eval()
+        correct = 0
+        total = 0
 
-        # Save as Image
-        graph.render("model/efficientnet_b0_create_graph", format="svg", cleanup=True)
+        with torch.no_grad():
+            for images, labels in loader:
+                images = images.to(self.device, non_blocking=True)
+                labels = labels.to(self.device, non_blocking=True)
+
+                # Using mixed precision inference
+                with autocast(enabled=self.use_amp):
+                    outputs = self.model(images)
+
+                _, predicted = torch.max(outputs, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+        return 100 * correct / total

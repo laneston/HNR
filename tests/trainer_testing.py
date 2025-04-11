@@ -1,7 +1,7 @@
 import torch
 import sys
 from pathlib import Path
-
+import warnings
 
 current_path = Path(__file__).resolve()
 project_parent = (
@@ -15,17 +15,18 @@ else:
     raise FileNotFoundError(f"destination directory does not exist: {project_parent}")
 
 try:
-    from modules import Model
+    from modules import MNISTEfficientNet
 
 except ImportError as e:
     print(f"Import failed: {e}")
 
 if __name__ == "__main__":
-    # input parameter is default or none.
-    modelHandle = Model("default")
-    # draw the neural network graph.
-    # modelHandle.graph_draw()
-    __model = modelHandle.base_train(16, "./data", 15)
 
-    # save the model.
-    torch.save(__model, "model/mnist_efficientnet.pth")
+    # Ignore unnecessary warnings
+    warnings.filterwarnings("ignore")
+    print(f"the torch version is: {torch.__version__}")
+    # Initialize the trainer
+    trainer = MNISTEfficientNet(use_amp=True)
+
+    # Start training (parameters can be adjusted as needed)
+    history, model = trainer.train(epochs=20, lr=1e-3, batch_size=16)
