@@ -1,7 +1,12 @@
+import os
+
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
 import torch
 import sys
 from pathlib import Path
-import warnings
+
+# import warnings
 
 current_path = Path(__file__).resolve()
 project_parent = (
@@ -23,7 +28,7 @@ except ImportError as e:
 if __name__ == "__main__":
 
     # Ignore unnecessary warnings
-    warnings.filterwarnings("ignore")
+    # warnings.filterwarnings("ignore")
     print(f"the torch version is: {torch.__version__}")
     # Initialize the trainer
     trainer = MNISTEfficientNet(use_amp=True)

@@ -11,11 +11,10 @@ from torch.cuda.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
 
+# Mathematical equivalence implementation[3,5](@ref)
 class SiLU(nn.Module):
     def forward(self, x):
-        return x * torch.sigmoid(
-            x
-        )  # Mathematical equivalence implementation[3,5](@ref)
+        return x * torch.sigmoid(x)
 
 
 class MNISTEfficientNet:
@@ -24,7 +23,7 @@ class MNISTEfficientNet:
         self.model = self._build_model()
         self.scaler = GradScaler(enabled=use_amp)
         self.use_amp = use_amp
-        self.writer = SummaryWriter()  # 初始化TensorBoard写入器
+        self.writer = SummaryWriter()  # Initialize TensorBoard writer
 
     def _build_model(self):
         """building and configure EfficientNet-B0 model"""
@@ -79,7 +78,7 @@ class MNISTEfficientNet:
         for images, _ in loader:
             # Calculate the current batch statistic
             batch_pixels = images.size(0) * images.size(2) * images.size(3)
-            channels_sum += torch.sum(images, dim=[0, 2, 3])  # 按通道求和
+            channels_sum += torch.sum(images, dim=[0, 2, 3])  # Sum by channel
             channels_sq_sum += torch.sum(images**2, dim=[0, 2, 3])
             total_pixels += batch_pixels
             num_batches += 1
@@ -189,11 +188,11 @@ class MNISTEfficientNet:
             self.model.train()
             total_loss = 0.0
 
-            for images, labels in train_loader:
+            for i, (images, labels) in enumerate(train_loader):
                 images = images.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
 
-                # 记录计算图（第一个epoch的第一个batch）
+                # Record the calculation chart (first batch of the first epoch)
                 if epoch == 0 and i == 0:
                     self.writer.add_graph(self.model, images)
 
@@ -219,12 +218,12 @@ class MNISTEfficientNet:
             # Printing progress
             current_lr = optimizer.param_groups[0]["lr"]
 
-            # 记录标量数据
+            # Record scalar data
             self.writer.add_scalar("Loss/train", avg_loss, epoch)
             self.writer.add_scalar("Accuracy/test", test_acc, epoch)
             self.writer.add_scalar("Learning Rate", current_lr, epoch)
 
-            # 记录参数分布
+            # Record parameter distribution
             for name, param in self.model.named_parameters():
                 self.writer.add_histogram(f"Parameters/{name}", param, epoch)
                 if param.grad is not None:
@@ -249,7 +248,7 @@ class MNISTEfficientNet:
         self.model.load_state_dict(best_weights)
         print(f"\nBest Test Accuracy: {best_acc:.2f}%")
 
-        # 关闭写入器
+        # Close the writer
         self.writer.close()
 
         return history, best_weights
