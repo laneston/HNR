@@ -15,3 +15,25 @@ pillow==11.0.0
 
 running the py file `tests/trainer_testing.py` can build the model of efficientnet B0 and saving in the path `./model`
 
+
+## Q&A
+
+```
+oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+```
+
+**- the first solution**
+
+```
+import warnings
+
+warnings.filterwarnings("ignore")
+```
+
+**- the second solution**
+
+```
+import os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Should be placed before importing tensorflow
+```
+

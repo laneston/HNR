@@ -30,3 +30,6 @@ if __name__ == "__main__":
 
     # Start training (parameters can be adjusted as needed)
     history, model = trainer.train(epochs=20, lr=1e-3, batch_size=16)
+
+    # save the model after trained.
+    torch.save(model.state_dict(), "model/mnist_efficientnet.pth")

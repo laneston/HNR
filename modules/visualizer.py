@@ -1,11 +1,6 @@
-import os
-
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from torchview import draw_graph
-from efficientnet_b0 import MNISTEfficientNet
 
 
 class ModelVisualizer:
@@ -56,16 +51,3 @@ class ModelVisualizer:
             "The TensorBoard log has been generated. Use the following command to view it:"
         )
         print("tensorboard --logdir=runs")
-
-
-if __name__ == "__main__":
-
-    # initial model
-    model = MNISTEfficientNet().model
-    # Create a visualization instance
-    visualizer = ModelVisualizer(
-        model=model,
-        input_size=(1, 1, 224, 224),  # Batch size x channel x height x width
-    )
-    # Perform visualization
-    visualizer.visualize()

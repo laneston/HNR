@@ -1,12 +1,14 @@
 import torch
+import os
 import torch.nn as nn
 import torch.optim as optim
 import torchvision
+
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from torchvision.models import efficientnet_b0
 from torch.cuda.amp import autocast, GradScaler
-import os
+from torch.utils.tensorboard import SummaryWriter
 
 
 class SiLU(nn.Module):
@@ -22,6 +24,7 @@ class MNISTEfficientNet:
         self.model = self._build_model()
         self.scaler = GradScaler(enabled=use_amp)
         self.use_amp = use_amp
+        self.writer = SummaryWriter()  # 初始化TensorBoard写入器
 
     def _build_model(self):
         """building and configure EfficientNet-B0 model"""
@@ -190,6 +193,10 @@ class MNISTEfficientNet:
                 images = images.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
 
+                # 记录计算图（第一个epoch的第一个batch）
+                if epoch == 0 and i == 0:
+                    self.writer.add_graph(self.model, images)
+
                 # Automatic Hybrid Precision Training
                 with autocast(enabled=self.use_amp):
                     outputs = self.model(images)
@@ -209,6 +216,20 @@ class MNISTEfficientNet:
 
             # Record the training process
             avg_loss = total_loss / len(train_loader.dataset)
+            # Printing progress
+            current_lr = optimizer.param_groups[0]["lr"]
+
+            # 记录标量数据
+            self.writer.add_scalar("Loss/train", avg_loss, epoch)
+            self.writer.add_scalar("Accuracy/test", test_acc, epoch)
+            self.writer.add_scalar("Learning Rate", current_lr, epoch)
+
+            # 记录参数分布
+            for name, param in self.model.named_parameters():
+                self.writer.add_histogram(f"Parameters/{name}", param, epoch)
+                if param.grad is not None:
+                    self.writer.add_histogram(f"Gradients/{name}", param.grad, epoch)
+
             history["train_loss"].append(avg_loss)
             history["test_acc"].append(test_acc)
 
@@ -217,8 +238,6 @@ class MNISTEfficientNet:
                 best_acc = test_acc
                 best_weights = self.model.state_dict().copy()
 
-            # Printing progress
-            current_lr = optimizer.param_groups[0]["lr"]
             print(
                 f"Epoch {epoch+1}/{epochs} | "
                 f"Loss: {avg_loss:.4f} | "
@@ -229,6 +248,10 @@ class MNISTEfficientNet:
         # Load the best model weights
         self.model.load_state_dict(best_weights)
         print(f"\nBest Test Accuracy: {best_acc:.2f}%")
+
+        # 关闭写入器
+        self.writer.close()
+
         return history, best_weights
 
     def evaluate(self, loader):
