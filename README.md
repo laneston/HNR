@@ -7,8 +7,10 @@ torch==2.3.1
 torchvision==0.18.1
 onnx==1.14.0
 onnxruntime==1.15.1
-opencv-contrib-python=4.11.0.86
+opencv-contrib-python==4.11.0.86
 pillow==11.0.0
+torchview==0.2.6
+tensorboard==2.19.0
 ```
 
 ### train the model
