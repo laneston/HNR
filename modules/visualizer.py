@@ -10,8 +10,10 @@ class ModelVisualizer:
         self.writer = SummaryWriter()  # TensorBoard Log Writer
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    """Execute visualization process"""
+
     def visualize(self):
-        """Execute visualization process"""
+
         # Generate simplified calculation diagram
         self._generate_simplified_graph()
 
@@ -21,8 +23,10 @@ class ModelVisualizer:
         # Close the writer
         self.writer.close()
 
+    """Generate and save simplified calculation diagrams"""
+
     def _generate_simplified_graph(self):
-        """Generate and save simplified calculation diagrams"""
+
         # Generate visual graphics using torchview
         model_graph = draw_graph(
             self.model,
@@ -40,8 +44,10 @@ class ModelVisualizer:
         )
         print("Simplified calculation diagram has been saved as model_architecture.svg")
 
+    """Generate TensorBoard logs"""
+
     def _generate_tensorboard_log(self):
-        """Generate TensorBoard logs"""
+
         # Create virtual input
         dummy_input = torch.randn(self.input_size).to(self.device)
 

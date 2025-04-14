@@ -30,10 +30,28 @@ import warnings
 warnings.filterwarnings("ignore")
 ```
 
+it maybe dosen't work.
+
 **- the second solution**
 
 ```
 import os
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Should be placed before importing tensorflow
 ```
+
+**SiLU function mathematical equivalence implementation**
+
+````
+class SiLU(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+````
+
+Due to some torch versions not supporting this activation function, sigmoid function is used as an equivalent alternative.
+
+## case
+
+<div align="center"><img src="https://github.com/laneston/HNR/tree/main/doc/result20250414.png" width="50%"></div>
+
+
 

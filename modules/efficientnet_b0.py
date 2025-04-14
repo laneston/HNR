@@ -236,6 +236,7 @@ class MNISTEfficientNet:
             if test_acc > best_acc:
                 best_acc = test_acc
                 best_weights = self.model.state_dict().copy()
+                best_model = self.model
 
             print(
                 f"Epoch {epoch+1}/{epochs} | "
@@ -251,7 +252,7 @@ class MNISTEfficientNet:
         # Close the writer
         self.writer.close()
 
-        return history, best_weights
+        return history, best_model
 
     def evaluate(self, loader):
         """Evaluation"""

@@ -2,5 +2,6 @@
 
 from .efficientnet_b0 import MNISTEfficientNet
 from .visualizer import ModelVisualizer
+from .mnist_predictor import MNISTMultiDigitPredictor
 
-__all__ = ("MNISTEfficientNet", "ModelVisualizer")
+__all__ = ("MNISTEfficientNet", "ModelVisualizer", "MNISTMultiDigitPredictor")
