@@ -51,7 +51,7 @@ Due to some torch versions not supporting this activation function, sigmoid func
 
 ## case
 
-<div align="center"><img src="https://github.com/laneston/HNR/tree/main/doc/result20250414.png" width="50%"></div>
+<div align="center"><img src="https://github.com/laneston/HNR/blob/main/doc/result20250414.png" width="50%"></div>
 
 
 
