@@ -193,7 +193,7 @@ class MNISTMultiDigitPredictor:
 
         cv2.namedWindow("Digit Detection", cv2.WINDOW_NORMAL)
         cv2.resizeWindow("Digit Detection", 1200, 800)
-        cv2.moveWindow("Digit Detection", 100, 100)  # 设置窗口位置
+        cv2.moveWindow("Digit Detection", 100, 100)  # Set window position
         cv2.imshow("Digit Detection", img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()

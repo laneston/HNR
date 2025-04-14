@@ -28,7 +28,7 @@ if __name__ == "__main__":
     predictor = MNISTMultiDigitPredictor("model/mnist_efficientnet.pth")
 
     # Prediction Example Image
-    image_path = "handwriting.jpg"
+    image_path = "handwriting2025.jpg"
 
     try:
         # Obtain prediction results
