@@ -34,7 +34,15 @@ if __name__ == "__main__":
     trainer = MNISTEfficientNet(use_amp=True)
 
     # Start training (parameters can be adjusted as needed)
-    history, model = trainer.train(epochs=20, lr=1e-3, batch_size=16)
+    history, model = trainer.train(epochs=20, lr=1e-3, batch_size=128)
 
+    # 检查当前路径下是否存在该文件夹
+    if not os.path.exists("model"):
+        # 不存在则创建
+        os.makedirs("model")
+        print(f"✅ 目录 model 已创建")
+    else:
+        print(f"⚠️ 目录 model 已存在")
+    
     # save the model after trained.
     torch.save(model.state_dict(), "model/mnist_efficientnet.pth")
